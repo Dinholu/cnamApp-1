@@ -1,4 +1,5 @@
 <?php
+
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Factory\AppFactory;
@@ -12,13 +13,14 @@ require_once __DIR__ . '/../bootstrap.php';
 
 $app = AppFactory::create();
 
-function  addHeaders (Response $response) : Response {
+function  addHeaders(Response $response): Response
+{
     $response = $response
-    ->withHeader("Content-Type", "application/json")
-    ->withHeader('Access-Control-Allow-Origin', ('https://tpbackend.herokuapp.com'))
-    ->withHeader('Access-Control-Allow-Headers', 'Content-Type,  Authorization')
-    ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
-    ->withHeader('Access-Control-Expose-Headers', 'Authorization');
+        ->withHeader("Content-Type", "application/json")
+        ->withHeader('Access-Control-Allow-Origin', ('https://tpbackend.herokuapp.com'))
+        ->withHeader('Access-Control-Allow-Headers', 'Content-Type,  Authorization')
+        ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
+        ->withHeader('Access-Control-Expose-Headers', 'Authorization');
 
     return $response;
 }
@@ -26,12 +28,13 @@ function  addHeaders (Response $response) : Response {
 function getJWTToken($request)
 {
     $payload = str_replace("Bearer ", "", $request->getHeader('Authorization')[0]);
-    $token = JWT::decode($payload,JWT_SECRET , array("HS256"));
-    return $token; 
+    $token = JWT::decode($payload, JWT_SECRET, array("HS256"));
+    return $token;
 }
 
 
-function createJwt (Response $response) : Response {
+function createJwt(Response $response): Response
+{
     $userid = "emma";
     $email = "emma@emma.fr";
     $issuedAt = time();
@@ -41,7 +44,7 @@ function createJwt (Response $response) : Response {
         'iat' => $issuedAt,
         'exp' => $expirationTime
     );
-    $token_jwt = JWT::encode($payload,JWT_SECRET, "HS256");
+    $token_jwt = JWT::encode($payload, JWT_SECRET, "HS256");
     $response = $response->withHeader("Authorization", "Bearer {$token_jwt}");
     return $response;
 }
@@ -50,34 +53,33 @@ const JWT_SECRET = "TP-CNAM";
 
 $app->get('/api/hello/{name}', function (Request $request, Response $response, $args) {
     $array = [];
-    $array ["nom"] = $args ['name'];
-    $response->getBody()->write(json_encode ($array));
+    $array["nom"] = $args['name'];
+    $response->getBody()->write(json_encode($array));
     return $response;
 });
 
 $app->options('/api/catalogue', function (Request $request, Response $response, $args) {
-    
+
     // Evite que le front demande une confirmation à chaque modification
     $response = $response->withHeader("Access-Control-Max-Age", 600);
-    
-    return addHeaders ($response);
+
+    return addHeaders($response);
 });
 
 // API Nécessitant un Jwt valide
 $app->get('/api/catalogue/{filtre}', function (Request $request, Response $response, $args) {
     $filtre = $args['filtre'];
     $flux = '[{"titre":"linux","ref":"001","prix":"20"},{"titre":"java","ref":"002","prix":"21"},{"titre":"windows","ref":"003","prix":"22"},{"titre":"angular","ref":"004","prix":"23"},{"titre":"unix","ref":"005","prix":"25"},{"titre":"javascript","ref":"006","prix":"19"},{"titre":"html","ref":"007","prix":"15"},{"titre":"css","ref":"008","prix":"10"}]';
-   
+
     if ($filtre) {
-      $data = json_decode($flux, true); 
-    	
-        $res = array_filter($data, function($obj) use ($filtre)
-        { 
+        $data = json_decode($flux, true);
+
+        $res = array_filter($data, function ($obj) use ($filtre) {
             return strpos($obj["titre"], $filtre) !== false;
         });
         $response->getBody()->write(json_encode(array_values($res)));
     } else {
-         $response->getBody()->write($flux);
+        $response->getBody()->write($flux);
     }
 
     return $response;
@@ -86,34 +88,34 @@ $app->get('/api/catalogue/{filtre}', function (Request $request, Response $respo
 // API Nécessitant un Jwt valide
 $app->get('/api/catalogue', function (Request $request, Response $response, $args) {
     $flux = '[{"titre":"linux","ref":"001","prix":"20"},{"titre":"java","ref":"002","prix":"21"},{"titre":"windows","ref":"003","prix":"22"},{"titre":"angular","ref":"004","prix":"23"},{"titre":"unix","ref":"005","prix":"25"},{"titre":"javascript","ref":"006","prix":"19"},{"titre":"html","ref":"007","prix":"15"},{"titre":"css","ref":"008","prix":"10"}]';
-    $data = json_decode($flux, true); 
-    
+    $data = json_decode($flux, true);
+
     $response->getBody()->write(json_encode($data));
-    
+
     return $response;
 });
 
 $app->options('/api/user', function (Request $request, Response $response, $args) {
-    
+
     // Evite que le front demande une confirmation à chaque modification
     $response = $response->withHeader("Access-Control-Max-Age", 600);
-    
-    return addHeaders ($response);
+
+    return addHeaders($response);
 });
 
 // API Nécessitant un Jwt valide
 $app->get('/api/user', function (Request $request, Response $response, $args) {
     global $entityManager;
-    
+
     $payload = getJWTToken($request);
     $login  = $payload->userid;
-    
+
     $utilisateurRepository = $entityManager->getRepository('Utilisateur');
     $utilisateur = $utilisateurRepository->findOneBy(array('login' => $login));
     if ($utilisateur) {
         $data = array('nom' => $utilisateur->getNom(), 'prenom' => $utilisateur->getPrenom());
-        $response = addHeaders ($response);
-        $response = createJwT ($response);
+        $response = addHeaders($response);
+        $response = createJwT($response);
         $response->getBody()->write(json_encode($data));
     } else {
         $response = $response->withStatus(401);
@@ -123,28 +125,28 @@ $app->get('/api/user', function (Request $request, Response $response, $args) {
 });
 
 // APi d'authentification générant un JWT
-$app->post('/api/login', function (Request $request, Response $response, $args) {   
+$app->post('/api/login', function (Request $request, Response $response, $args) {
     global $entityManager;
-    $err=false;
+    $err = false;
     $body = $request->getParsedBody();
-    $login = $body ['login'] ?? "";
-    $pass = $body ['pass'] ?? "";
+    $login = $body['login'] ?? "";
+    $pass = $body['pass'] ?? "";
 
-    if (!preg_match("/[a-zA-Z0-9]{1,20}/",$login))   {
+    if (!preg_match("/[a-zA-Z0-9]{1,20}/", $login)) {
         $err = true;
     }
-    if (!preg_match("/[a-zA-Z0-9]{1,20}/",$pass))  {
-        $err=true;
+    if (!preg_match("/[a-zA-Z0-9]{1,20}/", $pass)) {
+        $err = true;
     }
     if (!$err) {
         $utilisateurRepository = $entityManager->getRepository('Utilisateur');
         $utilisateur = $utilisateurRepository->findOneBy(array('login' => $login, 'password' => $pass));
         if ($utilisateur and $login == $utilisateur->getLogin() and $pass == $utilisateur->getPassword()) {
-            $response = addHeaders ($response);
-            $response = createJwT ($response);
+            $response = addHeaders($response);
+            $response = createJwT($response);
             $data = array('nom' => $utilisateur->getNom(), 'prenom' => $utilisateur->getPrenom());
             $response->getBody()->write(json_encode($data));
-        } else {          
+        } else {
             $response = $response->withStatus(401);
         }
     } else {
@@ -153,6 +155,7 @@ $app->post('/api/login', function (Request $request, Response $response, $args) 
 
     return $response;
 });
+
 
 
 // Middleware de validation du Jwt
@@ -164,7 +167,7 @@ $options = [
     "algorithm" => ["HS256"],
     "secret" => JWT_SECRET,
     "path" => ["/api"],
-    "ignore" => ["/api/hello","/api/login"],
+    "ignore" => ["/api/hello", "/api/login"],
     "error" => function ($response, $arguments) {
         $data = array('ERREUR' => 'Connexion', 'ERREUR' => 'JWT Non valide');
         $response = $response->withStatus(401);
