@@ -8,6 +8,7 @@ WORKDIR /var/www/html
 RUN curl -sSk https://getcomposer.org/installer | php -- --disable-tls && \
    mv composer.phar /usr/local/bin/composer \
  && apt-get update && apt-get install -y \
+    vim \
     curl \
     git \
     libbz2-dev \
