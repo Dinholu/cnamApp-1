@@ -8,6 +8,15 @@ function optionsCatalogue(Request $request, Response $response, $args)
 {
 
 	// Evite que le front demande une confirmation à chaque modification
+	$response = $response->withHeader('Access-Control-Max-Age', '*');
+
+	return addHeaders($response);
+}
+
+function optionsCategories(Request $request, Response $response, $args)
+{
+
+	// Evite que le front demande une confirmation à chaque modification
 	$response = $response->withHeader("Access-Control-Max-Age", 600);
 
 	return addHeaders($response);
@@ -21,26 +30,34 @@ function hello(Request $request, Response $response, $args)
 	return $response;
 }
 
-function getSearchCatalogue(Request $request, Response $response, $args)
+function getSearchCatalogue(Request $request, Response $response)
 {
 	global $entityManager;
-	$filtre = $args['filtre'];
 
-	if (!preg_match("/[a-zA-Z0-9]{1,20}/", $filtre)) {
-		$response = $response->withStatus(500);
-		return addHeaders($response);
+	// Récupérer les paramètres de la requête
+	$params = $request->getQueryParams(); // Pour les paramètres GET
+	$term = $params['term'] ?? null;
+	$category = $params['category'] ?? null;
+
+	// Construire la requête de recherche en fonction des paramètres
+	$produitRepository = $entityManager->getRepository('Produits');
+	$queryBuilder = $produitRepository->createQueryBuilder('p');
+
+	if ($term) {
+		$queryBuilder->where('LOWER(p.nom) LIKE :filtre OR LOWER(p.description) LIKE :filtre')
+			->setParameter('filtre', '%' . strtolower($term) . '%');
 	}
 
-	$produitRepository = $entityManager->getRepository('Produits');
+	if ($category) {
+		$queryBuilder->andWhere('p.categorie = :category')
+			->setParameter('category', $category);
+	}
 
-	$produits = $produitRepository->createQueryBuilder('p')
-		->where('LOWER(p.nom) LIKE :filtre OR LOWER(p.description) LIKE :filtre')
-		->setParameter('filtre', '%' . strtolower($filtre) . '%')
-		->getQuery()
-		->getResult();
+	$produits = $queryBuilder->getQuery()->getResult();
 
+	// Traitement des résultats et réponse
 	if ($produits) {
-		$data = array();
+		$data = [];
 		foreach ($produits as $produit) {
 			$data[] = array(
 				'id' => $produit->getId(),
@@ -51,17 +68,45 @@ function getSearchCatalogue(Request $request, Response $response, $args)
 				'categorie' => $produit->getCategorie()->getLabel(),
 			);
 		}
+
+		// Envoi de la réponse une seule fois après la boucle
 		$response = addHeaders($response);
 		$response = createJwT($response);
 		$response->getBody()->write(json_encode($data));
 	} else {
 		$response = $response->withStatus(404);
-		$response->getBody()->write("Aucun produit trouvé pour le filtre '$filtre'.");
+		$response->getBody()->write("Aucun produit trouvé pour le filtre fourni.");
 	}
 
 	return addHeaders($response);
 }
 
+function getCategories(Request $request, Response $response)
+{
+	global $entityManager;
+
+	$payload = getJWTToken($request);
+	$login  = $payload->userid;
+
+
+	$categorieRepository = $entityManager->getRepository('Categories');
+	$categories = $categorieRepository->findAll();
+	$data = [];
+	if ($categories) {
+		foreach ($categories as $categorie) {
+			$data[] = [
+				'id' => $categorie->getId(),
+				'label' => $categorie->getLabel(),
+			];
+		}
+	} else {
+		$response = $response->withStatus(404);
+	}
+
+	$response->getBody()->write(json_encode($data));
+
+	return addHeaders($response);
+}
 
 // API Nécessitant un Jwt valide
 function getCatalogue(Request $request, Response $response, $args)
@@ -179,7 +224,8 @@ function getSignup(Request $request, Response $response)
 
 		if ($existingUser) {
 			$response = $response->withStatus(409);
-			$response->getBody()->write(json_encode(['message' => 'Le login est deja utilise. Veuillez en choisir un autre.']));
+			// cleaner le body 
+			$response->getBody()->write(json_encode('Le login est deja utilise. Veuillez en choisir un autre.'));
 		} else {
 			$hashedPassword = password_hash($pass, PASSWORD_DEFAULT);
 			$user = new Utilisateurs();
